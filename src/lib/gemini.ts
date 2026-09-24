@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { SeverityLevel, IssueCategory } from '@/types';
+import { SeverityLevel, IssueCategory, DEFAULT_GEMINI_MODEL } from '@/types';
 
 export interface GeminiTriageOutput {
   title: string;
@@ -8,15 +8,18 @@ export interface GeminiTriageOutput {
   rootCause: string;
   suggestedFix: string;
   tags: string[];
+  modelUsed: string;
 }
 
 export async function analyzeErrorWithGemini(
   errorLog: string,
   language?: string,
   environment?: string,
-  customApiKey?: string
+  customApiKey?: string,
+  modelName: string = DEFAULT_GEMINI_MODEL
 ): Promise<GeminiTriageOutput> {
   const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+  const targetModel = modelName || DEFAULT_GEMINI_MODEL;
 
   if (apiKey) {
     try {
@@ -43,7 +46,7 @@ Adhere strictly to the requested JSON schema format.
 - tags: Array of concise string tags (e.g. ["bug", "react", "null-pointer"]).`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: targetModel,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -81,22 +84,27 @@ Adhere strictly to the requested JSON schema format.
           rootCause: parsed.rootCause || 'Root cause analysis unavailable.',
           suggestedFix: parsed.suggestedFix || '// Please review stack trace',
           tags: Array.isArray(parsed.tags) ? parsed.tags : ['bug', 'triage'],
+          modelUsed: targetModel,
         };
       }
     } catch (err) {
-      console.warn('Gemini API call failed, switching to local smart fallback engine:', err);
+      console.warn(`Gemini API call using ${targetModel} failed, switching to local smart fallback engine:`, err);
     }
   }
 
   // Smart heuristic fallback if no key is provided or API call fails
-  return getFallbackTriage(errorLog, language, environment);
+  const fallbackResult = getFallbackTriage(errorLog, language, environment);
+  return {
+    ...fallbackResult,
+    modelUsed: `${targetModel} (Local Fallback Engine)`,
+  };
 }
 
 function getFallbackTriage(
   log: string,
   language?: string,
   environment?: string
-): GeminiTriageOutput {
+): Omit<GeminiTriageOutput, 'modelUsed'> {
   const logLower = log.toLowerCase();
 
   // Pattern 1: React Null Pointer / Property of undefined

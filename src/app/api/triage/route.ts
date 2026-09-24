@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeErrorWithGemini } from '@/lib/gemini';
-import { TriageResult } from '@/types';
+import { TriageResult, DEFAULT_GEMINI_MODEL } from '@/types';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { errorLog, language, environment, customApiKey } = body;
+    const { errorLog, language, environment, model, customApiKey } = body;
 
     if (!errorLog || typeof errorLog !== 'string' || errorLog.trim().length === 0) {
       return NextResponse.json(
@@ -14,11 +14,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const selectedModel = model || DEFAULT_GEMINI_MODEL;
+
     const triageData = await analyzeErrorWithGemini(
       errorLog,
       language,
       environment,
-      customApiKey
+      customApiKey,
+      selectedModel
     );
 
     const result: TriageResult = {
