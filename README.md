@@ -3,6 +3,9 @@
 > **Software Bug Triage & Maintenance Engineer Agent**  
 > An intelligent full-stack autonomous agent built with Next.js 15, TypeScript, Tailwind CSS, and Google Gemini AI. AutoTriage AI ingests crash logs, stack traces, and error payloads, performs Root Cause Analysis (RCA), generates code fixes, and executes downstream GitHub issue creation and Discord/Slack webhook notifications.
 
+> [!IMPORTANT]
+> 📋 **For Reviewers & Evaluators**: Read the complete **[Solution Design & Functional Specification (SRS)](./SOLUTION_DESIGN_SPECIFICATION.md)** document outlining agent role selection rationale, system architecture, third-party integrations, and automation mechanisms.
+
 ---
 
 ## 🌟 Key Features & Capabilities
