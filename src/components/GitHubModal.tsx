@@ -10,6 +10,7 @@ interface GitHubModalProps {
   triageResult: TriageResult;
   settings: AppSettings;
   onUpdateSettings: (newSettings: AppSettings) => void;
+  onShowToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, message?: string) => void;
 }
 
 export default function GitHubModal({
@@ -18,6 +19,7 @@ export default function GitHubModal({
   triageResult,
   settings,
   onUpdateSettings,
+  onShowToast,
 }: GitHubModalProps) {
   const [token, setToken] = useState(settings.githubToken);
   const [owner, setOwner] = useState(settings.githubOwner || 'acme-corp');
@@ -67,8 +69,20 @@ export default function GitHubModal({
 
       const data = await res.json();
       setResult(data);
+
+      if (data.success) {
+        if (data.isMockPreview) {
+          onShowToast('info', 'GitHub Issue Payload Prepared', `Issue payload generated for repository ${owner}/${repo}`);
+        } else {
+          onShowToast('success', 'GitHub Issue Created!', `Successfully created issue #${data.issueNumber} in ${owner}/${repo}`);
+        }
+      } else {
+        onShowToast('error', 'GitHub Issue Creation Failed', data.error || 'Failed to communicate with GitHub API');
+      }
     } catch (err: any) {
-      setResult({ success: false, error: err.message || 'Failed to trigger GitHub API' });
+      const errorMsg = err.message || 'Failed to trigger GitHub API';
+      setResult({ success: false, error: errorMsg });
+      onShowToast('error', 'GitHub API Error', errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +91,7 @@ export default function GitHubModal({
   const handleCopyBody = (body: string) => {
     navigator.clipboard.writeText(body);
     setCopied(true);
+    onShowToast('success', 'Copied to Clipboard', 'GitHub Issue markdown body copied successfully.');
     setTimeout(() => setCopied(false), 2000);
   };
 

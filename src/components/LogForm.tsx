@@ -2,19 +2,28 @@
 
 import { useState } from 'react';
 import { SAMPLE_PRESETS } from './SamplePresets';
-import { SamplePreset } from '@/types';
-import { Terminal, Play, Sparkles, RefreshCw, Zap, Code2, AlertTriangle, Layers } from 'lucide-react';
+import { SamplePreset, AVAILABLE_MODELS } from '@/types';
+import { Terminal, Sparkles, RefreshCw, Zap, Code2, AlertTriangle, Layers, Cpu } from 'lucide-react';
 
 interface LogFormProps {
-  onSubmit: (log: string, language: string, environment: string) => void;
+  onSubmit: (log: string, language: string, environment: string, model: string) => void;
   isLoading: boolean;
+  selectedModel: string;
+  onSelectModel: (modelId: string) => void;
 }
 
-export default function LogForm({ onSubmit, isLoading }: LogFormProps) {
+export default function LogForm({
+  onSubmit,
+  isLoading,
+  selectedModel,
+  onSelectModel,
+}: LogFormProps) {
   const [logText, setLogText] = useState('');
   const [language, setLanguage] = useState('Auto-Detect');
   const [environment, setEnvironment] = useState('Production');
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
+
+  const activeModelObj = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   const handleSelectPreset = (preset: SamplePreset) => {
     setLogText(preset.log);
@@ -26,7 +35,7 @@ export default function LogForm({ onSubmit, isLoading }: LogFormProps) {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!logText.trim() || isLoading) return;
-    onSubmit(logText, language, environment);
+    onSubmit(logText, language, environment, selectedModel);
   };
 
   const handleClear = () => {
@@ -59,7 +68,7 @@ export default function LogForm({ onSubmit, isLoading }: LogFormProps) {
         )}
       </div>
 
-      {/* Sample Presets Buttons Section (Required by prompt spec) */}
+      {/* Sample Presets Buttons Section */}
       <div className="mb-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-2">
           <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -108,8 +117,8 @@ e.g. TypeError: Cannot read properties of undefined (reading 'map') at UserList.
           </div>
         </div>
 
-        {/* Framework / Language & Environment Selectors */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Controls Grid: Framework, Environment & Model Selection */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-cyan-400" />
@@ -146,6 +155,24 @@ e.g. TypeError: Cannot read properties of undefined (reading 'map') at UserList.
               <option value="Development">Local Development</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+              Selected AI Model
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => onSelectModel(e.target.value)}
+              className="w-full rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-2 text-xs font-mono font-semibold text-emerald-300 focus:border-emerald-500 focus:outline-none"
+            >
+              {AVAILABLE_MODELS.map((model) => (
+                <option key={model.id} value={model.id} className="bg-slate-900 text-slate-200 py-1 font-mono text-xs">
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Submit Triage Button */}
@@ -162,12 +189,12 @@ e.g. TypeError: Cannot read properties of undefined (reading 'map') at UserList.
             {isLoading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
-                <span>Running Gemini 2.5 Flash Root Cause Analysis...</span>
+                <span>Running {activeModelObj.name} Root Cause Analysis...</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4 text-emerald-200" />
-                <span>Analyze & Triage Error with Gemini AI</span>
+                <span>Analyze & Triage Error with {activeModelObj.name}</span>
               </>
             )}
           </button>

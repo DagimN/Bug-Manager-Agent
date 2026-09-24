@@ -10,6 +10,7 @@ interface WebhookModalProps {
   triageResult: TriageResult;
   settings: AppSettings;
   onUpdateSettings: (newSettings: AppSettings) => void;
+  onShowToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, message?: string) => void;
 }
 
 export default function WebhookModal({
@@ -18,6 +19,7 @@ export default function WebhookModal({
   triageResult,
   settings,
   onUpdateSettings,
+  onShowToast,
 }: WebhookModalProps) {
   const [platform, setPlatform] = useState<'discord' | 'slack'>(settings.defaultPlatform || 'discord');
   const [webhookUrl, setWebhookUrl] = useState(
@@ -65,12 +67,24 @@ export default function WebhookModal({
 
       const data = await res.json();
       setResult(data);
+
+      if (data.success) {
+        if (data.isMockPreview) {
+          onShowToast('info', `${platform.toUpperCase()} Webhook Formatted`, data.message);
+        } else {
+          onShowToast('success', `${platform.toUpperCase()} Alert Dispatched!`, data.message);
+        }
+      } else {
+        onShowToast('error', 'Webhook Delivery Failed', data.error || data.message);
+      }
     } catch (err: any) {
+      const errorMsg = err.message || 'Failed to send webhook notification';
       setResult({
         success: false,
         message: 'Failed to dispatch webhook notification',
-        error: err.message,
+        error: errorMsg,
       });
+      onShowToast('error', 'Webhook Notification Error', errorMsg);
     } finally {
       setIsSubmitting(false);
     }

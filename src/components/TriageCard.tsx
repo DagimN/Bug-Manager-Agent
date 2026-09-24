@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TriageResult } from '@/types';
+import { TriageResult, AVAILABLE_MODELS } from '@/types';
 import CodeBlock from './CodeBlock';
 import {
   ShieldAlert,
@@ -12,25 +12,24 @@ import {
   Check,
   Download,
   Terminal,
-  Sparkles,
-  Layers,
   FileCode2,
-  CheckCircle2,
+  Cpu,
 } from 'lucide-react';
 
 interface TriageCardProps {
   result: TriageResult;
   onOpenGitHubModal: () => void;
   onOpenWebhookModal: () => void;
+  onShowToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, message?: string) => void;
 }
 
 export default function TriageCard({
   result,
   onOpenGitHubModal,
   onOpenWebhookModal,
+  onShowToast,
 }: TriageCardProps) {
   const [copiedReport, setCopiedReport] = useState(false);
-  const [viewMode, setViewMode] = useState<'formatted' | 'diff'>('formatted');
 
   const getSeverityBadgeClass = (severity: string) => {
     switch (severity) {
@@ -46,11 +45,16 @@ export default function TriageCard({
     }
   };
 
+  const modelInfo = AVAILABLE_MODELS.find((m) => m.id === result.modelUsed) || {
+    name: result.modelUsed || 'Gemini AI Engine',
+  };
+
   const handleCopyMarkdown = () => {
     const reportMarkdown = `# 🚨 AutoTriage AI Report: ${result.title}
 
 - **Severity**: ${result.severity}
 - **Category**: ${result.category}
+- **Model Engine**: ${modelInfo.name}
 - **Language**: ${result.language || 'Auto-Detect'}
 - **Environment**: ${result.environment || 'Production'}
 - **Tags**: ${result.tags.join(', ')}
@@ -65,17 +69,23 @@ ${result.suggestedFix}
 `;
     navigator.clipboard.writeText(reportMarkdown);
     setCopiedReport(true);
+    onShowToast('success', 'Report Copied', 'Full Markdown triage report copied to clipboard.');
     setTimeout(() => setCopiedReport(false), 2000);
   };
 
   const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(result, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `autotriage-${result.id}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    try {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(result, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `autotriage-${result.id}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      onShowToast('success', 'JSON Exported', `Downloaded autotriage-${result.id}.json`);
+    } catch (err: any) {
+      onShowToast('error', 'Export Failed', 'Could not export JSON report file.');
+    }
   };
 
   return (
@@ -95,6 +105,12 @@ ${result.suggestedFix}
             <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
               {result.category}
             </span>
+            {result.modelUsed && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-1">
+                <Cpu className="w-3 h-3 text-emerald-400" />
+                {modelInfo.name}
+              </span>
+            )}
             {result.environment && (
               <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800">
                 Env: {result.environment}
@@ -152,7 +168,7 @@ ${result.suggestedFix}
         </div>
       </div>
 
-      {/* Proactive Downstream Action Bar (Required by prompt spec) */}
+      {/* Proactive Downstream Action Bar */}
       <div className="pt-5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Create GitHub Issue Button */}
