@@ -1,10 +1,11 @@
-import { AppSettings, TriageResult } from '@/types';
+import { AppSettings, TriageResult, DEFAULT_GEMINI_MODEL } from '@/types';
 
 const SETTINGS_KEY = 'autotriage_settings_v1';
 const HISTORY_KEY = 'autotriage_history_v1';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
+  selectedModel: DEFAULT_GEMINI_MODEL,
   githubToken: '',
   githubOwner: 'octocat',
   githubRepo: 'hello-world',
