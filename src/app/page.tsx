@@ -1,15 +1,16 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import Header from "@/components/Header";
-import LogForm from "@/components/LogForm";
-import TriageCard from "@/components/TriageCard";
-import GitHubModal from "@/components/GitHubModal";
-import WebhookModal from "@/components/WebhookModal";
-import SettingsModal from "@/components/SettingsModal";
-import HistorySidebar from "@/components/HistorySidebar";
-import { SAMPLE_PRESETS } from "@/components/SamplePresets";
-import { TriageResult, AppSettings } from "@/types";
+import { useState, useEffect, useCallback } from 'react';
+import Header from '@/components/Header';
+import LogForm from '@/components/LogForm';
+import TriageCard from '@/components/TriageCard';
+import GitHubModal from '@/components/GitHubModal';
+import WebhookModal from '@/components/WebhookModal';
+import SettingsModal from '@/components/SettingsModal';
+import HistorySidebar from '@/components/HistorySidebar';
+import IntegrationModal from '@/components/IntegrationModal';
+import ToastContainer from '@/components/Toast';
+import { TriageResult, AppSettings, AVAILABLE_MODELS, ToastMessage, ToastType } from '@/types';
 import {
   loadSettings,
   saveSettings,
@@ -18,8 +19,8 @@ import {
   deleteHistoryItem,
   clearHistory,
   DEFAULT_SETTINGS,
-} from "@/lib/storage";
-import { Sparkles, ShieldCheck, Activity } from "lucide-react";
+} from '@/lib/storage';
+import { ShieldCheck, Activity, Cpu, Server } from 'lucide-react';
 
 export default function Home() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -28,11 +29,29 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Toast stack state
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
   // Modals visibility state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const [isWebhookOpen, setIsWebhookOpen] = useState(false);
+  const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
+
+  const showToast = useCallback((type: ToastType, title: string, message?: string) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+    setToasts((prev) => [...prev, { id, type, title, message }]);
+
+    // Auto dismiss after 4.5 seconds
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  }, []);
+
+  const handleDismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   useEffect(() => {
     // Load local settings & history on client side mount
@@ -41,28 +60,40 @@ export default function Home() {
     setSettings(loadedSets);
     setHistory(loadedHist);
 
-    // If history exists, populate latest result; otherwise initialize with a sample
+    // If history exists, populate latest result
     if (loadedHist.length > 0) {
       setCurrentResult(loadedHist[0]);
     }
   }, []);
 
+  const handleSelectModel = (modelId: string) => {
+    const newSettings = { ...settings, selectedModel: modelId };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    const modelObj = AVAILABLE_MODELS.find((m) => m.id === modelId);
+    showToast('info', 'AI Model Switched', `Active model set to ${modelObj?.name || modelId}`);
+  };
+
   const handleTriageSubmit = async (
     errorLog: string,
     language: string,
     environment: string,
+    model: string
   ) => {
     setIsLoading(true);
     setErrorMessage(null);
 
+    const activeModelObj = AVAILABLE_MODELS.find((m) => m.id === model) || AVAILABLE_MODELS[0];
+
     try {
-      const res = await fetch("/api/triage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           errorLog,
           language,
           environment,
+          model,
           customApiKey: settings.geminiApiKey || undefined,
         }),
       });
@@ -78,18 +109,24 @@ export default function Home() {
       const updatedHist = saveHistoryItem(resultData);
       setHistory(updatedHist);
 
+      showToast(
+        'success',
+        'Triage Analysis Complete!',
+        `Root Cause Analysis generated using ${activeModelObj.name}`
+      );
+
       // Smooth scroll to result
       setTimeout(() => {
-        const resultElement = document.getElementById("triage-result-view");
+        const resultElement = document.getElementById('triage-result-view');
         if (resultElement) {
-          resultElement.scrollIntoView({ behavior: "smooth" });
+          resultElement.scrollIntoView({ behavior: 'smooth' });
         }
       }, 100);
     } catch (err: any) {
-      console.error("Triage error:", err);
-      setErrorMessage(
-        err.message || "An unexpected error occurred while analyzing the log.",
-      );
+      console.error('Triage error:', err);
+      const msg = err.message || 'An unexpected error occurred while analyzing the log.';
+      setErrorMessage(msg);
+      showToast('error', 'Triage Analysis Failed', msg);
     } finally {
       setIsLoading(false);
     }
@@ -106,58 +143,68 @@ export default function Home() {
     if (currentResult?.id === id) {
       setCurrentResult(updated.length > 0 ? updated[0] : null);
     }
+    showToast('info', 'Triage Log Removed', 'Selected item removed from session history.');
   };
 
   const handleClearHistory = () => {
     clearHistory();
     setHistory([]);
     setCurrentResult(null);
+    showToast('info', 'History Cleared', 'All stored triage logs have been removed.');
   };
+
+  const currentModelObj = AVAILABLE_MODELS.find((m) => m.id === settings.selectedModel) || AVAILABLE_MODELS[0];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950 flex flex-col">
       {/* Top Bar Header */}
       <Header
+        selectedModel={settings.selectedModel}
+        onSelectModel={handleSelectModel}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenIntegration={() => setIsIntegrationOpen(true)}
         historyCount={history.length}
       />
 
+      {/* Toast Notification Container */}
+      <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+
       {/* Hero Banner / Sub-Header */}
-      <div className="border-b border-slate-800/60 bg-linear-to-b from-slate-900/50 via-slate-950 to-slate-950 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="border-b border-slate-800/60 bg-gradient-to-b from-slate-900/50 via-slate-950 to-slate-950 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Activity className="w-3.5 h-3.5" /> Autonomous Maintenance
-              Engineer Agent
+              <Activity className="w-3.5 h-3.5" /> Autonomous Maintenance Engineer Agent
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Software Crash Log Triage & Code Repair
+              Software Crash Log Triage & Repair
             </h1>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Ingest stack traces, analyze root causes using Gemini 2.5 Flash
-              structured outputs, and trigger automated downstream resolution
-              workflows across GitHub and Discord/Slack.
+              Ingest stack traces, analyze root causes using Gemini AI structured outputs, and trigger automated downstream resolution workflows across GitHub and Discord/Slack with duplicate log deduplication.
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono text-slate-400 bg-slate-900/90 p-4 rounded-xl border border-slate-800 shrink-0">
-            <div>
-              <div className="text-slate-500 text-[10px] uppercase font-bold">
-                Engine
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsIntegrationOpen(true)}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-emerald-300 transition-all shadow-md"
+            >
+              <Server className="w-4 h-4 text-emerald-400" />
+              <span>Backend API Ingestion</span>
+            </button>
+
+            <div className="flex items-center gap-4 text-xs font-mono text-slate-400 bg-slate-900/90 p-4 rounded-xl border border-slate-800 shrink-0">
+              <div>
+                <div className="text-slate-500 text-[10px] uppercase font-bold">Engine</div>
+                <div className="text-emerald-300 font-semibold flex items-center gap-1">
+                  <Cpu className="w-3.5 h-3.5 text-emerald-400" /> {currentModelObj.name}
+                </div>
               </div>
-              <div className="text-slate-200 font-semibold flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />{" "}
-                gemini-2.5-flash
-              </div>
-            </div>
-            <div className="h-8 w-px bg-slate-800" />
-            <div>
-              <div className="text-slate-500 text-[10px] uppercase font-bold">
-                Outputs
-              </div>
-              <div className="text-slate-200 font-semibold">
-                Structured JSON
+              <div className="h-8 w-px bg-slate-800" />
+              <div>
+                <div className="text-slate-500 text-[10px] uppercase font-bold">Outputs</div>
+                <div className="text-slate-200 font-semibold">Structured JSON</div>
               </div>
             </div>
           </div>
@@ -181,7 +228,12 @@ export default function Home() {
 
         {/* 1. Log Ingestion & Submission Form Section */}
         <section>
-          <LogForm onSubmit={handleTriageSubmit} isLoading={isLoading} />
+          <LogForm
+            onSubmit={handleTriageSubmit}
+            isLoading={isLoading}
+            selectedModel={settings.selectedModel}
+            onSelectModel={handleSelectModel}
+          />
         </section>
 
         {/* 2. Triage Result Dashboard View Section */}
@@ -201,6 +253,7 @@ export default function Home() {
               result={currentResult}
               onOpenGitHubModal={() => setIsGitHubOpen(true)}
               onOpenWebhookModal={() => setIsWebhookOpen(true)}
+              onShowToast={showToast}
             />
           </section>
         )}
@@ -212,6 +265,13 @@ export default function Home() {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={handleSaveSettings}
+        onShowToast={showToast}
+      />
+
+      <IntegrationModal
+        isOpen={isIntegrationOpen}
+        onClose={() => setIsIntegrationOpen(false)}
+        onShowToast={showToast}
       />
 
       <HistorySidebar
@@ -231,6 +291,7 @@ export default function Home() {
             triageResult={currentResult}
             settings={settings}
             onUpdateSettings={handleSaveSettings}
+            onShowToast={showToast}
           />
 
           <WebhookModal
@@ -239,6 +300,7 @@ export default function Home() {
             triageResult={currentResult}
             settings={settings}
             onUpdateSettings={handleSaveSettings}
+            onShowToast={showToast}
           />
         </>
       )}
@@ -246,13 +308,8 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>
-            © 2026 AutoTriage AI • Intelligent Bug Triage & Maintenance Engineer
-            Agent
-          </p>
-          <p className="font-mono text-[11px] text-slate-600">
-            Powered by Google Gemini 2.5 Flash
-          </p>
+          <p>© 2026 AutoTriage AI • Intelligent Bug Triage & Maintenance Engineer Agent</p>
+          <p className="font-mono text-[11px] text-slate-600">Deduplication & Programmatic Ingestion API Active</p>
         </div>
       </footer>
     </div>
